@@ -19,8 +19,15 @@ This project implements JWT authentication with ASP.NET Core Identity, PostgreSQ
 
 ## Setup
 
-1. Update `ConnectionStrings:DefaultConnection` in `AuthApi/appsettings.json` or user secrets.
-2. Ensure PostgreSQL is running and the target database can be created.
+1. Ensure PostgreSQL is running and the target database can be created.
+2. Set local development secrets with Secret Manager:
+
+```powershell
+dotnet user-secrets init --project AuthApi
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=AuthApiDb;Username=postgres;Password=YOUR_DB_PASSWORD" --project AuthApi
+dotnet user-secrets set "Jwt:Key" "YOUR_AT_LEAST_32_CHAR_SECRET_KEY" --project AuthApi
+```
+
 3. From repo root, run:
 
 ```powershell
@@ -30,6 +37,8 @@ dotnet run --project AuthApi
 ```
 
 Application runs pending migrations on startup and seeds three roles automatically.
+
+`appsettings.json` in repo contains only placeholders. Real secrets should stay in local user secrets, not in Git.
 
 ## Auth Endpoints
 
