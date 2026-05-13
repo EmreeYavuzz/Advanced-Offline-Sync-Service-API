@@ -360,3 +360,15 @@ Bu task icin teslim paketi su sekilde hazirlandi:
 - GitHub repo
 - README
 - Offline senaryosunu gosteren ekran kaydi
+
+## Lisans
+
+Bu proje MIT lisansı ile lisanslanmıştır. Daha fazla bilgi için iletişime geçebilirsiniz.
+
+## Katkıda Bulunma
+
+1. Bu depoyu fork edin.
+2. Yeni bir branch oluşturun (`git checkout -b feature/yeniOzellik`).
+3. Değişikliklerinizi commit edin (`git commit -m 'feat: yeni özellik eklendi'`).
+4. Branch'inizi push edin (`git push origin feature/yeniOzellik`).
+5. Bir Pull Request oluşturun.
