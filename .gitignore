@@ -6,3 +6,11 @@ obj/
 TestResults/
 *.user
 *.suo
+mobile/node_modules/
+mock-api/node_modules/
+mobile/.expo/
+mobile/dist/
+skills-lock.json
+otokar.txt
+.DS_Store
+*.log

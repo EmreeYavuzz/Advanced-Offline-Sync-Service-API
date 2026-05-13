@@ -1,297 +1,362 @@
-# Advanced Identity Auth API
+# React Native Cevrimdisi Servis Formu
 
-This project implements JWT authentication with ASP.NET Core Identity, PostgreSQL, EF Core migrations, role-based authorization, refresh token rotation, audit logging, login rate limiting, and access-token blacklisting.
+Bu repo, sahada internet olmasa bile servis talebi olusturabilen bir mobil demo uygulasidir. Form kaydi once cihaza yazilir, baglanti uygun hale gelince uygulama bekleyen kayitlari otomatik olarak sunucuya gonderir.
 
-## Features
+Proje iki parcadan olusur:
 
-- `register`, `login`, `refresh`, and `logout` endpoints
-- Three roles: `Admin`, `IndividualUser`, `CorporateUser`
-- Refresh tokens stored in PostgreSQL and revocable
-- Access token blacklist using JWT `jti`
-- IP-based rate limiting for the login endpoint
-- Audit log table for API access history
-- Scalar/OpenAPI for exploring endpoints
+- `mobile/`: Expo Router + TypeScript mobil uygulama
+- `mock-api/`: Express tabanli demo backend
 
-## Project Structure
+## Demo Video
 
-- `AuthApi/`: API project
-- `AuthApi.Tests/`: integration tests
+Offline kayit, otomatik sync ve cakisma cozumunu gosteren ekran kaydi:
 
-## Setup
+[Uygulama Tanıtım ve Demo Videosu](https://youtu.be/IVtDPGbkX2c)
 
-1. Ensure PostgreSQL is running and the target database can be created.
-2. Set local development secrets with Secret Manager:
+## Amac
+
+Bu demo su problemi cozer:
+
+- surucu internet yokken servis talebi olusturabilir
+- kayit uygulama kapansa bile kaybolmaz
+- internet geldiginde manuel buton olmadan otomatik senkron olur
+- her kaydin durumu listede gorunur
+- cakisma olursa kullanici karar verir
+
+## Teknoloji Stack
+
+- React Native
+- Expo
+- Expo Router
+- TypeScript
+- AsyncStorage
+- NetInfo
+- Express
+
+Bonus tarafinda hazirlanan altyapi:
+
+- `expo-notifications`
+- `expo-background-task`
+- `expo-task-manager`
+
+## Gereksinimler
+
+- Node.js 18+
+- npm 9+
+- Expo SDK 54
+- Android Emulator veya gercek cihaz
+
+Not:
+
+- Notification ve background task gibi bonus ozellikler Expo Go yerine development build veya gercek cihazda daha dogru test edilir.
+
+## Ozellikler
+
+- Form gonderildigi anda kayit once cihaza yazilir
+- Kayitlar AsyncStorage icinde kalici tutulur
+- Uygulama kapanip acilsa da kuyruk geri yuklenir
+- Baglanti durumu NetInfo ile izlenir
+- Server sagligi ayrica `GET /health` ile kontrol edilir
+- Baglanti ve server uygun hale gelince otomatik senkron baslar
+- Her kayit icin durum listede gorunur:
+  - `Bekliyor`
+  - `Gonderiliyor`
+  - `Gonderildi`
+  - `Hata`
+  - `Cakisma`
+  - `Atlandi`
+- Cakisma durumunda kullanici:
+  - `Uzerine Yaz`
+  - `Atla`
+  secenegini kullanabilir
+- Senkron gecmisi tutulur
+- Bekleyen kayit olustugunda local notification hatirlaticisi planlanir
+- Bekleyen kayit kalmadiginda planlanan bildirim iptal edilir
+- Arka plan sync icin queue isleyici altyapisi vardir
+
+## Proje Yapisi
+
+```text
+mobile/
+  app/
+    (tabs)/
+      index.tsx
+      records.tsx
+      history.tsx
+    _layout.tsx
+    modal.tsx
+  src/
+    components/
+    config/
+    constants/
+    context/
+    services/
+    types/
+    utils/
+
+mock-api/
+  server.js
+```
+
+Bu taskin merkezindeki kritik dosyalar:
+
+```text
+mobile/src/context/SyncContext.tsx
+mobile/src/services/storage.ts
+mobile/src/services/syncService.ts
+mobile/src/services/syncRunner.ts
+mobile/src/services/networkService.ts
+mobile/src/services/notificationService.ts
+mobile/src/services/backgroundTask.ts
+mobile/src/components/ConflictSheet.tsx
+mock-api/server.js
+```
+
+## Veri Akisi
+
+Uygulamanin temel akisi su sekildedir:
+
+1. Kullanici formu doldurur.
+2. Kayit once cihazdaki AsyncStorage kuyruguna yazilir.
+3. Uygulama uygun baglanti varsa otomatik sync dener.
+4. Basariliysa kayit `Gonderildi` olur.
+5. Hata varsa kayit `Hata` olarak kalir.
+6. `409 Conflict` durumunda kullaniciya karar ekrani gosterilir.
+
+Bu sayede uygulama sadece ekrandaki state'e bagli kalmaz; veri cihazda kalici olarak saklanir.
+
+## Mock API
+
+Sunucu endpointleri:
+
+- `GET /health`
+- `GET /service-requests`
+- `POST /service-requests/sync`
+
+### Conflict Kurali
+
+Asagidaki kombinasyon ayniysa:
+
+- `vehicleId`
+- `serviceType`
+- `requestedAt` gun bilgisi
+
+ve server tarafinda mevcut kayit varsa, `baseVersion` uyusmazliginda API `409 Conflict` doner.
+
+Buradaki conflict zaman karsilastirmasi degil, ayni kayda ait versiyon uyusmazligidir.
+
+## Ornek Conflict Yaniti
+
+API `409 Conflict` dondugunde payload mantigi kabaca su sekildedir:
+
+```json
+{
+  "message": "Ayni arac icin ayni gun servis kaydi bulundu.",
+  "serverVersion": 1,
+  "serverRecord": {
+    "serverId": "server-123",
+    "vehicleId": "34ABC123",
+    "serviceType": "Bakim",
+    "requestedAt": "2026-05-13T09:00:00.000Z"
+  }
+}
+```
+
+Mobil uygulama bu durumda kullaniciya:
+
+- `Uzerine Yaz`
+- `Atla`
+
+seceneklerini sunar.
+
+## Ortam Degiskenleri
+
+Mobil uygulama API adresini su degiskenden okuyabilir:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.50:4000
+```
+
+Ornek dosya:
+
+- `mobile/.env.example`
+
+Bu degisken verilmezse uygulama sirasiyla:
+
+- `EXPO_PUBLIC_API_URL`
+- Expo host adresi
+- Android emulator icin `http://10.0.2.2:4000`
+
+adaylarini kullanmayi dener.
+
+## Kurulum ve Calistirma
+
+### 1. Mock API'yi baslat
 
 ```powershell
-dotnet user-secrets init --project AuthApi
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=AuthApiDb;Username=postgres;Password=YOUR_DB_PASSWORD" --project AuthApi
-dotnet user-secrets set "Jwt:Key" "YOUR_AT_LEAST_32_CHAR_SECRET_KEY" --project AuthApi
+cd mock-api
+npm install
+npm start
 ```
 
-3. From repo root, run:
+Beklenen:
+
+- `http://localhost:4000/health` calisir
+
+### 2. Mobil uygulamayi baslat
 
 ```powershell
-dotnet restore
-dotnet ef database update --project AuthApi
-dotnet run --project AuthApi
+cd mobile
+npm install
+npm start
 ```
 
-Application runs pending migrations on startup and seeds three roles automatically.
+### 3. Gercek cihaz kullaniliyorsa
 
-`appsettings.json` in repo contains only placeholders. Real secrets should stay in local user secrets, not in Git.
-
-## Auth Endpoints
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `POST /api/auth/refresh`
-- `POST /api/auth/logout`
-
-`register`, `login`, and `refresh` return:
-
-- `accessToken`
-- `refreshToken`
-- `accessTokenExpiresAtUtc`
-- `email`
-- `userId`
-- `roles`
-
-## Protected Endpoints
-
-- `GET /api/protected/me`
-- `GET /api/protected/admin`
-- `GET /api/protected/individual`
-- `GET /api/protected/corporate`
-
-## Role Seed Behavior
-
-These roles are created on startup if they do not exist:
-
-- `Admin`
-- `IndividualUser`
-- `CorporateUser`
-
-## 401 vs 403
-
-- Expired, invalid, or blacklisted access token returns `401 Unauthorized`.
-- Valid access token with missing required role returns `403 Forbidden`.
-
-## Refresh Token Behavior
-
-- Refresh tokens are stored hashed in database.
-- `refresh` revokes old refresh token and issues new one.
-- `logout` revokes submitted refresh token and blacklists current access token.
-
-## Rate Limiting
-
-`POST /api/auth/login` is limited per client IP. Exceeding limit returns `429 Too Many Requests`.
-
-## Audit Logging
-
-Each `/api/*` request writes audit log entry containing user, endpoint, method, IP, timestamp, and result status.
-
-## Manual Testing Checklist
-
-Keep `dotnet run --project AuthApi` open while testing. API listens on `http://localhost:5222` and OpenAPI UI is available at `http://localhost:5222/scalar/v1`.
-
-You can test API in either of these ways:
-
-- Use Scalar UI in browser
-- Use `AuthApi/AuthApi.http` file from VS Code with REST Client extension
-
-### 1. Register admin user
-
-Send `POST /api/auth/register` with:
-
-```json
-{
-  "fullName": "Admin User",
-  "email": "admin@example.com",
-  "userName": "adminuser",
-  "password": "P@ssw0rd1",
-  "confirmPassword": "P@ssw0rd1",
-  "role": "Admin"
-}
-```
-
-Expected result:
-
-- `200 OK`
-- Response contains `accessToken`, `refreshToken`, `accessTokenExpiresAtUtc`, `email`, `userId`, `roles`
-- `roles` contains `Admin`
-
-If user already exists, API returns `400 Bad Request`. In that case, continue with login step.
-
-### 2. Login with admin user
-
-Send `POST /api/auth/login` with:
-
-```json
-{
-  "email": "admin@example.com",
-  "password": "P@ssw0rd1"
-}
-```
-
-Expected result:
-
-- `200 OK`
-- Response contains new `accessToken`
-- Response contains `refreshToken`
-
-Save both token values for next steps.
-
-### 3. Call authenticated `me` endpoint
-
-Send `GET /api/protected/me` with:
-
-```http
-Authorization: Bearer {accessToken}
-```
-
-Expected result:
-
-- `200 OK`
-- Response contains `Authenticated request succeeded.`
-
-This proves JWT authentication works for protected endpoint.
-
-### 4. Call admin-only endpoint
-
-Send `GET /api/protected/admin` with:
-
-```http
-Authorization: Bearer {accessToken}
-```
-
-Expected result:
-
-- `200 OK`
-- Response contains `Admin endpoint reached.`
-
-This proves role-based authorization works for admin user.
-
-### 5. Refresh tokens
-
-Send `POST /api/auth/refresh` with:
-
-```json
-{
-  "refreshToken": "{refreshToken}"
-}
-```
-
-Expected result:
-
-- `200 OK`
-- Response contains new `accessToken`
-- Response contains new `refreshToken`
-
-Save new token pair. Old refresh token should no longer be valid.
-
-### 6. Logout
-
-Send `POST /api/auth/logout` with:
-
-```http
-Authorization: Bearer {latestAccessToken}
-```
-
-and body:
-
-```json
-{
-  "refreshToken": "{latestRefreshToken}"
-}
-```
-
-Expected result:
-
-- `200 OK`
-- Response contains success message
-
-This revokes submitted refresh token and blacklists current access token.
-
-### 7. Verify old access token no longer works
-
-Send `GET /api/protected/me` again with same access token used for logout.
-
-Expected result:
-
-- `401 Unauthorized`
-
-This proves access-token blacklisting is active.
-
-### 8. Verify role-based `403 Forbidden`
-
-Register and login with individual user:
-
-```json
-{
-  "fullName": "Individual User",
-  "email": "individual@example.com",
-  "userName": "individualuser",
-  "password": "P@ssw0rd1",
-  "confirmPassword": "P@ssw0rd1",
-  "role": "IndividualUser"
-}
-```
-
-Then test:
-
-- `GET /api/protected/admin` with individual user's access token
-- Expected: `403 Forbidden`
-- `GET /api/protected/individual` with individual user's access token
-- Expected: `200 OK`
-
-This proves API returns `403` for valid tokens that do not have required role.
-
-### 9. Negative tests
-
-Use these quick checks to validate error handling:
-
-- Login with wrong password
-- Expected: `401 Unauthorized`
-- Call protected endpoint with malformed or expired access token
-- Expected: `401 Unauthorized`
-- Call `POST /api/auth/refresh` twice with same refresh token
-- First call: `200 OK`
-- Second call: `401 Unauthorized`
-- Send too many login requests from same IP within one minute
-- Expected: `429 Too Many Requests`
-
-### Expected status code summary
-
-- `200 OK`: request succeeded
-- `400 Bad Request`: invalid register request or logout request
-- `401 Unauthorized`: invalid login, invalid token, expired token, revoked token, or invalid refresh token
-- `403 Forbidden`: valid token, but user does not have required role
-- `429 Too Many Requests`: login rate limit exceeded
-
-## Automated Test Coverage
-
-Repository also includes integration tests for main authentication flows in `AuthApi.Tests`.
-
-Run them with:
+Telefon `localhost` adresini bilgisayar olarak gormez. Gerekirse API adresini LAN IP ile ver:
 
 ```powershell
-dotnet test AuthApi.Tests/AuthApi.Tests.csproj
+cd mobile
+$env:EXPO_PUBLIC_API_URL="http://192.168.1.50:4000"
+npm start
 ```
 
-Current automated coverage includes:
+veya `.env` dosyasi kullan:
 
-- admin register, login, and protected endpoint access
-- refresh token rotation and rejection of reused refresh tokens
-- logout blacklisting for current access token
-- `IndividualUser` role restriction against admin endpoints
-- `CorporateUser` access to its own endpoint and rejection from admin endpoints
-- wrong password login returning `401 Unauthorized`
-- invalid role registration returning `400 Bad Request`
-- audit log creation for protected API requests
-- revoked access token persistence in database after logout
-- login rate limiting returning `429 Too Many Requests`
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.50:4000
+```
 
-Expected result:
+## Uygulamada Gorulecek Ekranlar
 
-- all tests pass
-- output ends with `Failed: 0`
+- `Yeni Talep`
+- `Kayitlar`
+- `Islem Gecmisi`
+- `Cakisma Karari` modal ekrani
+
+## Test Senaryolari
+
+### 1. Offline kayit
+
+1. Mock API'yi kapat.
+2. Formu doldur.
+3. Kaydi gonder.
+
+Beklenen:
+
+- kayit listede gorunur
+- durum `Bekliyor` veya uygun durumda `Hata` olabilir
+- uygulama kapanip acilsa da kayit durur
+
+### 2. Otomatik sync
+
+1. Bekleyen kayit varken Mock API'yi yeniden ac.
+2. Birkac saniye bekle veya uygulamayi foreground yap.
+
+Beklenen:
+
+- manuel sync butonu olmadan senkron baslar
+- kayit `Gonderildi` olur
+- islem gecmisi guncellenir
+
+### 3. Hata senaryosu
+
+1. Formda `Arac ID` olarak `ERR-500` gir.
+2. Kaydi gonder.
+
+Beklenen:
+
+- API `500` doner
+- kayit `Hata` olur
+- hata mesaji listede ve gecmiste gorunur
+
+### 4. Cakisma senaryosu
+
+1. Ayni arac ve servis tipi ile bir kayit gonder.
+2. Sonra ayni gun icin ayni kombinasyonla ikinci kaydi gonder.
+
+Beklenen:
+
+- cakisma modal'i acilir
+- `Cihazdaki Kayit` ve `Buluttaki Kayit` gorunur
+- `Uzerine Yaz` ve `Atla` secenekleri calisir
+
+## Bonus Ozellikler
+
+### Local notification
+
+Bekleyen kayit olustugunda local notification hatirlaticisi planlanir. Bekleyen kayit kalmadiginda planlanan bildirim iptal edilir.
+
+Not:
+
+- Bu kisim development build veya gercek cihaz uzerinde daha dogru test edilir.
+- Expo Go ortaminda notification davranisi sinirli olabilir.
+
+### Sync gecmisi
+
+Uygulamada ayri bir `Islem Gecmisi` ekrani vardir. Burada:
+
+- hangi kayit
+- ne zaman
+- hangi islem
+- basarili mi
+
+bilgileri gorulebilir.
+
+### Background sync
+
+Arka plan sync `expo-background-task` ile ayni queue isleyicisini kullanir. Uygulama task'i register eder; isletim sistemi uygun gordugunde AsyncStorage icindeki `Bekliyor` veya `Hata` durumundaki kayitlari tekrar gondermeyi dener.
+
+Bu mekanizma:
+
+- internet durumunu kontrol eder
+- queue icindeki bekleyen kayitlari okur
+- uygun kayitlari API'ye gonderir
+- basarili olursa durumu gunceller
+- gerekirse bildirim gonderebilir
+
+Not:
+
+- Bu kisim anlik degil, isletim sisteminin planlayicisina baglidir.
+- Development build veya native cihaz testleri daha gercekci sonuc verir.
+
+## Dogrulama Komutlari
+
+Mobil TypeScript derlemesi:
+
+```powershell
+cd mobile
+npx tsc --noEmit
+```
+
+Mock API soz dizimi kontrolu:
+
+```powershell
+cd mock-api
+node -c server.js
+```
+
+## Kabul Kriterleri Kontrolu
+
+Tamamlanan zorunlu maddeler:
+
+- Offline kayit var
+- AsyncStorage kullaniliyor
+- Otomatik sync var
+- Sync durumlari listede gorunuyor
+- Cakisma cozumu var
+- Manuel sync butonu yok
+
+Bonus durumu:
+
+- Local push notification: altyapi var, native test onerilir
+- Sync gecmisi ekrani: tamam
+- Arka plan sync: altyapi var, native test onerilir
+
+## Teslim Formati
+
+Bu task icin teslim paketi su sekilde hazirlandi:
+
+- GitHub repo
+- README
+- Offline senaryosunu gosteren ekran kaydi
